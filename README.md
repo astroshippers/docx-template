@@ -9,7 +9,7 @@ Write a Word document with `{{placeholders}}`, `{{#if}}`, `{{#unless}}`, and `{{
 ## Installation
 
 ```bash
-composer require osbre/docx-template
+composer require astroshippers/docx-template
 ```
 
 ## Usage

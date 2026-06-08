@@ -1,5 +1,5 @@
 {
-    "name": "osbre/docx-template",
+    "name": "astroshippers/docx-template",
     "description": "Make new .docx files from a Handlebars-like template (variables, conditionals, loops, table-row repetition).",
     "keywords": ["php", "docx", "template", "word", "handlebars"],
     "license": "MIT",

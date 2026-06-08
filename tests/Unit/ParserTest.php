@@ -70,6 +70,52 @@ describe('Parser::parse', function (): void {
         parser()->parse('{{#if a}}x{{/each}}');
     })->throws(TemplateException::class, 'mismatched');
 
+    it('rejects {{else}} with a helpful message', function (): void {
+        parser()->parse('{{#if x}}a{{else}}b{{/if}}');
+    })->throws(TemplateException::class, 'else');
+
+    it('rejects {{#if}} with no variable name', function (): void {
+        parser()->parse('{{#if}}x{{/if}}');
+    })->throws(TemplateException::class, 'missing a variable name');
+
+    it('rejects {{#each}} with no variable name', function (): void {
+        parser()->parse('{{#each}}x{{/each}}');
+    })->throws(TemplateException::class, 'missing a variable name');
+
+    it('rejects an unknown block keyword', function (): void {
+        parser()->parse('{{#endif}}');
+    })->throws(TemplateException::class, 'unknown block');
+
+    it('rejects capitalized block keyword', function (): void {
+        parser()->parse('{{#If flag}}x{{/if}}');
+    })->throws(TemplateException::class, 'unknown block');
+
+    it('rejects an unknown close tag', function (): void {
+        parser()->parse('{{/foo}}');
+    })->throws(TemplateException::class, 'unknown close tag');
+
+    it('rejects Handlebars-style each-as syntax', function (): void {
+        parser()->parse('{{#each xs as |x|}}{{/each}}');
+    })->throws(TemplateException::class, 'expected a single variable name');
+
+    it('rejects extra arguments in #if', function (): void {
+        parser()->parse('{{#if a b}}x{{/if}}');
+    })->throws(TemplateException::class, 'expected a single variable name');
+
+    it('rejects arguments on a close tag', function (): void {
+        parser()->parse('{{#if a}}x{{/if a}}');
+    })->throws(TemplateException::class, 'should not take arguments');
+
+    it('includes the offending tag verbatim in errors', function (): void {
+        expect(fn () => parser()->parse('hello {{#if}}x{{/if}}'))
+            ->toThrow(TemplateException::class, '{{#if}}');
+    });
+
+    it('includes a byte offset in errors', function (): void {
+        expect(fn () => parser()->parse('hello {{#if}}x{{/if}}'))
+            ->toThrow(TemplateException::class, 'offset 6');
+    });
+
     it('tolerates whitespace around #, /, and inside block tags', function (): void {
         expect(render('{{ #if  flag }}y{{ /if }}', ['flag' => true]))->toBe('y');
         expect(render('{{# if flag}}y{{/ if}}', ['flag' => true]))->toBe('y');

@@ -20,7 +20,11 @@ use DocxTemplate\TemplateException;
 
 final readonly class Parser
 {
-    private const string TAG = '/\{\{\s*([#\/]?)\s*([a-zA-Z_][a-zA-Z0-9_.]*)(?:\s+([a-zA-Z_][a-zA-Z0-9_.]*))?\s*\}\}/';
+    private const string TAG = '/\{\{([^{}]*)\}\}/';
+
+    private const string NAME = '/^[a-zA-Z_][a-zA-Z0-9_.]*$/';
+
+    private const string BLOCK = '/^([#\/])\s*([a-zA-Z_][a-zA-Z0-9_.]*)(?:\s+(.*))?$/s';
 
     /**
      * @return list<Node>
@@ -55,14 +59,19 @@ final readonly class Parser
         foreach ($matches as $m) {
             $fullText = $m[0][0];
             $fullOffset = $m[0][1];
+            $inner = trim($m[1][0]);
+
+            // {{}} and {{   }} are treated as literal text — likely a typo, but
+            // surfacing them verbatim in the document is less disruptive than throwing.
+            if ($inner === '') {
+                continue;
+            }
+
             if ($fullOffset > $cursor) {
                 $tokens[] = new TextToken(substr($template, $cursor, $fullOffset - $cursor));
             }
 
-            $prefix = $m[1][0];
-            $name = $m[2][0];
-            $arg = isset($m[3]) ? $m[3][0] : '';
-            $tokens[] = $this->classify($prefix, $name, $arg);
+            $tokens[] = $this->classify($inner, $fullText, $fullOffset);
             $cursor = $fullOffset + strlen($fullText);
         }
 
@@ -73,27 +82,69 @@ final readonly class Parser
         return $tokens;
     }
 
-    private function classify(string $prefix, string $name, string $arg): Token
+    private function classify(string $inner, string $rawTag, int $offset): Token
     {
-        if ($prefix === '' && $arg === '') {
-            return new VarToken($name);
+        if ($inner === 'else' || str_starts_with($inner, 'else ') || str_starts_with($inner, 'else{')) {
+            throw new TemplateException(sprintf(
+                '%s at offset %d is not supported; if/unless blocks have no else branch',
+                $rawTag, $offset,
+            ));
         }
 
-        if ($prefix === '#' && $arg !== '') {
-            $kind = BlockKind::tryFrom($name);
-            if ($kind !== null) {
-                return new OpenToken($kind, $arg);
+        if (preg_match(self::BLOCK, $inner, $m) === 1) {
+            $prefix = $m[1];
+            $name = $m[2];
+            $argRaw = isset($m[3]) ? trim($m[3]) : '';
+
+            if ($prefix === '#') {
+                $kind = BlockKind::tryFrom($name);
+                if (! $kind instanceof BlockKind) {
+                    throw new TemplateException(sprintf(
+                        'unknown block %s at offset %d; expected one of: #if, #unless, #each',
+                        $rawTag, $offset,
+                    ));
+                }
+
+                if ($argRaw === '') {
+                    throw new TemplateException(sprintf(
+                        '%s at offset %d is missing a variable name (e.g. {{#%s items}})',
+                        $rawTag, $offset, $name,
+                    ));
+                }
+
+                if (preg_match(self::NAME, $argRaw) !== 1) {
+                    throw new TemplateException(sprintf(
+                        'invalid syntax in %s at offset %d; expected a single variable name after #%s',
+                        $rawTag, $offset, $name,
+                    ));
+                }
+
+                return new OpenToken($kind, $argRaw);
             }
-        }
 
-        if ($prefix === '/' && $arg === '') {
             $kind = BlockKind::tryFrom($name);
-            if ($kind !== null) {
-                return new CloseToken($kind);
+            if (! $kind instanceof BlockKind) {
+                throw new TemplateException(sprintf(
+                    'unknown close tag %s at offset %d; expected one of: {{/if}}, {{/unless}}, {{/each}}',
+                    $rawTag, $offset,
+                ));
             }
+
+            if ($argRaw !== '') {
+                throw new TemplateException(sprintf(
+                    'close tag %s at offset %d should not take arguments',
+                    $rawTag, $offset,
+                ));
+            }
+
+            return new CloseToken($kind);
         }
 
-        throw new TemplateException(sprintf('invalid tag: {{%s%s %s}}', $prefix, $name, $arg));
+        if (preg_match(self::NAME, $inner) === 1) {
+            return new VarToken($inner);
+        }
+
+        throw new TemplateException(sprintf('invalid tag %s at offset %d', $rawTag, $offset));
     }
 
     /**

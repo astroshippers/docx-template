@@ -6,6 +6,7 @@ namespace DocxTemplate\Internal;
 
 final readonly class SmartMerge
 {
+    #[\NoDiscard]
     public function heal(string $xml): string
     {
         $out = '';

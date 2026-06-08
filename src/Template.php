@@ -54,6 +54,7 @@ final readonly class Template
     /**
      * @return list<string>
      */
+    #[\NoDiscard]
     public function variables(): array
     {
         $entries = $this->zip->unpack($this->bytes);
@@ -64,7 +65,10 @@ final readonly class Template
                 continue;
             }
 
-            $ast = $this->parser->parse($this->structural->fixup($this->smartMerge->heal($bin)));
+            $ast = $bin
+                |> $this->smartMerge->heal(...)
+                |> $this->structural->fixup(...)
+                |> $this->parser->parse(...);
             $this->collectNames($ast, $names);
         }
 

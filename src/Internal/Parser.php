@@ -25,6 +25,7 @@ final readonly class Parser
     /**
      * @return list<Node>
      */
+    #[\NoDiscard]
     public function parse(string $template): array
     {
         $tokens = $this->tokenize($template);

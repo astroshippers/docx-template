@@ -12,6 +12,7 @@ final readonly class Zip
     /**
      * @return array<string, string>
      */
+    #[\NoDiscard]
     public function unpack(string $bin): array
     {
         $tmp = $this->tempFile($bin);
@@ -45,6 +46,7 @@ final readonly class Zip
     /**
      * @param  array<string, string>  $entries
      */
+    #[\NoDiscard]
     public function pack(array $entries): string
     {
         $tmp = tempnam(sys_get_temp_dir(), 'docx-out-');

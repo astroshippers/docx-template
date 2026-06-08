@@ -22,6 +22,7 @@ final readonly class Render
     /**
      * @param  array<string, mixed>  $assigns
      */
+    #[\NoDiscard]
     public function run(string $template, array $assigns): string
     {
         $entries = $this->zip->unpack($template);
@@ -42,16 +43,24 @@ final readonly class Render
     private function renderEntry(string $name, string $bin, array $assigns, array &$images): string
     {
         if ($name === 'word/document.xml') {
-            $healed = $this->structural->fixup($this->smartMerge->heal($bin));
+            $healed = $bin
+                |> $this->smartMerge->heal(...)
+                |> $this->structural->fixup(...);
             $withDrawings = $this->extractImages($healed, $assigns, $images);
 
-            return $this->interpreter->render($this->parser->parse($withDrawings), $assigns);
+            return $withDrawings
+                |> $this->parser->parse(...)
+                |> (fn (array $ast): string => $this->interpreter->render($ast, $assigns));
         }
 
         if ($this->zip->isTemplatePart($name)) {
-            $healed = $this->structural->fixup($this->smartMerge->heal($bin));
+            $healed = $bin
+                |> $this->smartMerge->heal(...)
+                |> $this->structural->fixup(...);
 
-            return $this->interpreter->render($this->parser->parse($healed), $assigns);
+            return $healed
+                |> $this->parser->parse(...)
+                |> (fn (array $ast): string => $this->interpreter->render($ast, $assigns));
         }
 
         return $bin;

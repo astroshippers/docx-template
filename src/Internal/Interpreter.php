@@ -17,6 +17,7 @@ final readonly class Interpreter
      * @param  list<Node>  $ast
      * @param  array<string, mixed>  $assigns
      */
+    #[\NoDiscard]
     public function render(array $ast, array $assigns): string
     {
         return $this->renderNodes($ast, [$assigns]);
@@ -46,7 +47,9 @@ final readonly class Interpreter
         }
 
         if ($node instanceof VarNode) {
-            return $this->xmlEscape($this->stringify($this->lookupScoped($scopes, $node->path)));
+            return $this->lookupScoped($scopes, $node->path)
+                |> $this->stringify(...)
+                |> $this->xmlEscape(...);
         }
 
         if ($node instanceof IfNode) {

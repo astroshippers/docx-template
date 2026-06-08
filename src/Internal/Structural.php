@@ -8,6 +8,7 @@ final readonly class Structural
 {
     private const string CONTROL_TAG_CAPTURE = '(\{\{\s*[#\/](?:if|unless|each)(?:\s+[a-zA-Z_][a-zA-Z0-9_.]*)?\s*\}\})';
 
+    #[\NoDiscard]
     public function fixup(string $xml): string
     {
         $xml = $this->unwrap($xml, '/<w:tr\b[^>]*>(?:(?!<\/w:tr>).)*?'.self::CONTROL_TAG_CAPTURE.'(?:(?!<\/w:tr>).)*?<\/w:tr>/s');

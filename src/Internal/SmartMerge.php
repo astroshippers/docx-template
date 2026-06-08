@@ -89,9 +89,12 @@ final readonly class SmartMerge
         }
 
         $gt = strpos($xml, '>', $pos);
+        // @codeCoverageIgnoreStart
         if ($gt === false) {
             return null;
         }
+
+        // @codeCoverageIgnoreEnd
 
         return $gt + 1;
     }

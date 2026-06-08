@@ -124,6 +124,80 @@ describe('Template::render', function (): void {
         expect($doc)->not->toContain('{{image')->not->toContain('<w:drawing>');
     });
 
+    it('{{image var}} drops paragraph when bytes is non-string', function (): void {
+        $bytes = Template::load(fixturePath('image.docx'))->render([
+            'logo' => ['bytes' => 123, 'format' => 'png', 'width_cm' => 2, 'height_cm' => 2],
+        ]);
+        expect(documentXml($bytes))->not->toContain('<w:drawing>');
+    });
+
+    it('{{image var}} drops paragraph when width is non-numeric', function (): void {
+        $png = base64_decode(PNG_1x1, true);
+        $bytes = Template::load(fixturePath('image.docx'))->render([
+            'logo' => ['bytes' => $png, 'format' => 'png', 'width_cm' => 'big', 'height_cm' => 2],
+        ]);
+        expect(documentXml($bytes))->not->toContain('<w:drawing>');
+    });
+
+    it('{{image var}} drops paragraph when height is non-numeric', function (): void {
+        $png = base64_decode(PNG_1x1, true);
+        $bytes = Template::load(fixturePath('image.docx'))->render([
+            'logo' => ['bytes' => $png, 'format' => 'png', 'width_cm' => 2, 'height_cm' => null],
+        ]);
+        expect(documentXml($bytes))->not->toContain('<w:drawing>');
+    });
+
+    it('{{image var}} drops paragraph when format is not a known image type', function (): void {
+        $png = base64_decode(PNG_1x1, true);
+        $bytes = Template::load(fixturePath('image.docx'))->render([
+            'logo' => ['bytes' => $png, 'format' => 'tiff', 'width_cm' => 2, 'height_cm' => 2],
+        ]);
+        expect(documentXml($bytes))->not->toContain('<w:drawing>');
+    });
+
+    it('appends to existing word/_rels/document.xml.rels when present', function (): void {
+        $png = base64_decode(PNG_1x1, true);
+        $packed = (new Zip)->pack([
+            'word/document.xml' => '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>{{image logo}}</w:t></w:r></w:p></w:body></w:document>',
+            'word/_rels/document.xml.rels' => '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="x" Target="y"/></Relationships>',
+            '[Content_Types].xml' => '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>',
+        ]);
+        $out = Template::fromString($packed)->render([
+            'logo' => ['bytes' => $png, 'format' => 'png', 'width_cm' => 2, 'height_cm' => 2],
+        ]);
+        $rels = part($out, 'word/_rels/document.xml.rels');
+        expect($rels)->toContain('Id="rId1"')->toContain('rIdDocxTmpl1');
+    });
+
+    it('skips content-types update when [Content_Types].xml is missing', function (): void {
+        $png = base64_decode(PNG_1x1, true);
+        $packed = (new Zip)->pack([
+            'word/document.xml' => '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>{{image logo}}</w:t></w:r></w:p></w:body></w:document>',
+        ]);
+        $out = Template::fromString($packed)->render([
+            'logo' => ['bytes' => $png, 'format' => 'png', 'width_cm' => 2, 'height_cm' => 2],
+        ]);
+        $entries = (new Zip)->unpack($out);
+        expect($entries)->not->toHaveKey('[Content_Types].xml');
+        expect($entries)->toHaveKey('word/media/image1.png');
+    });
+
+    it('deduplicates Content_Types entries when multiple images share an extension', function (): void {
+        $png = base64_decode(PNG_1x1, true);
+        $packed = (new Zip)->pack([
+            'word/document.xml' => '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>{{image a}}</w:t></w:r></w:p><w:p><w:r><w:t>{{image b}}</w:t></w:r></w:p></w:body></w:document>',
+            '[Content_Types].xml' => '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>',
+        ]);
+        $img = ['bytes' => $png, 'format' => 'png', 'width_cm' => 2, 'height_cm' => 2];
+        $out = Template::fromString($packed)->render(['a' => $img, 'b' => $img]);
+        $ct = part($out, '[Content_Types].xml');
+        expect(substr_count($ct, 'Extension="png"'))->toBe(1);
+    });
+
+    it('errors on a non-existent path', function (): void {
+        Template::load('/nonexistent/missing.docx');
+    })->throws(TemplateException::class, 'Could not read');
+
     it('output is a valid .docx that round-trips through unzip', function (): void {
         $bytes = Template::load(fixturePath('hello.docx'))->render(['name' => 'Ostap']);
         $entries = (new Zip)->unpack($bytes);

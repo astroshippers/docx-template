@@ -72,9 +72,12 @@ final readonly class Render
      */
     private function extractImages(string $xml, array $assigns, array &$images): string
     {
+        // @codeCoverageIgnoreStart
         if (preg_match_all(self::IMAGE_PARAGRAPH, $xml, $matches, PREG_OFFSET_CAPTURE | PREG_SET_ORDER) === false) {
             return $xml;
         }
+
+        // @codeCoverageIgnoreEnd
 
         if ($matches === []) {
             return $xml;

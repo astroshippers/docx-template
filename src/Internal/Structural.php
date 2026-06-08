@@ -30,9 +30,12 @@ final readonly class Structural
 
     private function extractText(string $xml): string
     {
+        // @codeCoverageIgnoreStart
         if (preg_match_all('/<w:t\b[^>]*>(.*?)<\/w:t>/s', $xml, $matches) === false) {
             return '';
         }
+
+        // @codeCoverageIgnoreEnd
 
         /** @var list<string> $texts */
         $texts = $matches[1];

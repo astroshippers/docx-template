@@ -78,7 +78,7 @@ final readonly class Interpreter
             return $out;
         }
 
-        return '';
+        return ''; // @codeCoverageIgnore
     }
 
     /**

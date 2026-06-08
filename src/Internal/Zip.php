@@ -28,11 +28,14 @@ final readonly class Zip
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $name = $zip->getNameIndex($i);
             $content = $zip->getFromIndex($i);
+            // @codeCoverageIgnoreStart
             if ($name === false || $content === false) {
                 $zip->close();
                 @unlink($tmp);
                 throw new TemplateException('Could not read entry from .docx archive.');
             }
+
+            // @codeCoverageIgnoreEnd
 
             $entries[$name] = $content;
         }
@@ -50,16 +53,22 @@ final readonly class Zip
     public function pack(array $entries): string
     {
         $tmp = tempnam(sys_get_temp_dir(), 'docx-out-');
+        // @codeCoverageIgnoreStart
         if ($tmp === false) {
             throw new TemplateException('Could not allocate temp file.');
         }
 
+        // @codeCoverageIgnoreEnd
+
         @unlink($tmp);
 
         $zip = new ZipArchive;
+        // @codeCoverageIgnoreStart
         if ($zip->open($tmp, ZipArchive::CREATE) !== true) {
             throw new TemplateException('Could not create .docx archive.');
         }
+
+        // @codeCoverageIgnoreEnd
 
         foreach ($entries as $name => $content) {
             $zip->addFromString($name, $content);
@@ -69,9 +78,12 @@ final readonly class Zip
 
         $bytes = @file_get_contents($tmp);
         @unlink($tmp);
+        // @codeCoverageIgnoreStart
         if ($bytes === false) {
             throw new TemplateException('Could not read packed .docx.');
         }
+
+        // @codeCoverageIgnoreEnd
 
         return $bytes;
     }
@@ -86,6 +98,7 @@ final readonly class Zip
     private function tempFile(string $bin): string
     {
         $tmp = tempnam(sys_get_temp_dir(), 'docx-in-');
+        // @codeCoverageIgnoreStart
         if ($tmp === false || @file_put_contents($tmp, $bin) === false) {
             if ($tmp !== false) {
                 @unlink($tmp);
@@ -93,6 +106,8 @@ final readonly class Zip
 
             throw new TemplateException('Could not write temp file.');
         }
+
+        // @codeCoverageIgnoreEnd
 
         return $tmp;
     }

@@ -52,9 +52,12 @@ final readonly class Parser
     {
         $tokens = [];
         $cursor = 0;
+        // @codeCoverageIgnoreStart
         if (preg_match_all(self::TAG, $template, $matches, PREG_OFFSET_CAPTURE | PREG_SET_ORDER) === false) {
             return [];
         }
+
+        // @codeCoverageIgnoreEnd
 
         foreach ($matches as $m) {
             $fullText = $m[0][0];

@@ -70,6 +70,14 @@ describe('Parser::parse', function (): void {
         parser()->parse('{{#if a}}x{{/each}}');
     })->throws(TemplateException::class, 'mismatched');
 
+    it('raises on a stray top-level close tag', function (): void {
+        parser()->parse('hello {{/if}}');
+    })->throws(TemplateException::class, 'unexpected {{/if}}');
+
+    it('rejects an inner that is neither a block nor a name', function (): void {
+        parser()->parse('{{1bad}}');
+    })->throws(TemplateException::class, 'invalid tag');
+
     it('rejects {{else}} with a helpful message', function (): void {
         parser()->parse('{{#if x}}a{{else}}b{{/if}}');
     })->throws(TemplateException::class, 'else');

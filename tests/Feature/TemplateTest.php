@@ -11,7 +11,7 @@ const PNG_1x1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9
 
 function part(string $docxBytes, string $name): string
 {
-    $entries = Zip::unpack($docxBytes);
+    $entries = (new Zip)->unpack($docxBytes);
     expect($entries)->toHaveKey($name);
 
     return $entries[$name];
@@ -108,7 +108,7 @@ describe('Template::render', function (): void {
             ->toContain('<w:drawing>')
             ->toContain('r:embed="rIdDocxTmpl1"');
 
-        $entries = Zip::unpack($bytes);
+        $entries = (new Zip)->unpack($bytes);
         expect($entries)->toHaveKey('word/media/image1.png');
         expect($entries['word/media/image1.png'])->toBe($png);
 
@@ -126,7 +126,7 @@ describe('Template::render', function (): void {
 
     it('output is a valid .docx that round-trips through unzip', function (): void {
         $bytes = Template::load(fixturePath('hello.docx'))->render(['name' => 'Ostap']);
-        $entries = Zip::unpack($bytes);
+        $entries = (new Zip)->unpack($bytes);
         expect($entries)->toHaveKey('word/document.xml');
     });
 });

@@ -18,17 +18,17 @@ use DocxTemplate\Internal\Token\Token;
 use DocxTemplate\Internal\Token\VarToken;
 use DocxTemplate\TemplateException;
 
-final class Parser
+final readonly class Parser
 {
     private const string TAG = '/\{\{\s*([#\/]?)\s*([a-zA-Z_][a-zA-Z0-9_.]*)(?:\s+([a-zA-Z_][a-zA-Z0-9_.]*))?\s*\}\}/';
 
     /**
      * @return list<Node>
      */
-    public static function parse(string $template): array
+    public function parse(string $template): array
     {
-        $tokens = self::tokenize($template);
-        [$ast, $rest] = self::parseNodes($tokens, null, 0);
+        $tokens = $this->tokenize($template);
+        [$ast, $rest] = $this->parseNodes($tokens, null, 0);
 
         if ($rest < count($tokens)) {
             $tok = $tokens[$rest];
@@ -43,7 +43,7 @@ final class Parser
     /**
      * @return list<Token>
      */
-    private static function tokenize(string $template): array
+    private function tokenize(string $template): array
     {
         $tokens = [];
         $cursor = 0;
@@ -61,7 +61,7 @@ final class Parser
             $prefix = $m[1][0];
             $name = $m[2][0];
             $arg = isset($m[3]) ? $m[3][0] : '';
-            $tokens[] = self::classify($prefix, $name, $arg);
+            $tokens[] = $this->classify($prefix, $name, $arg);
             $cursor = $fullOffset + strlen($fullText);
         }
 
@@ -72,7 +72,7 @@ final class Parser
         return $tokens;
     }
 
-    private static function classify(string $prefix, string $name, string $arg): Token
+    private function classify(string $prefix, string $name, string $arg): Token
     {
         if ($prefix === '' && $arg === '') {
             return new VarToken($name);
@@ -99,7 +99,7 @@ final class Parser
      * @param  list<Token>  $tokens
      * @return array{0: list<Node>, 1: int}
      */
-    private static function parseNodes(array $tokens, ?BlockKind $expected, int $i): array
+    private function parseNodes(array $tokens, ?BlockKind $expected, int $i): array
     {
         $acc = [];
         $n = count($tokens);
@@ -134,7 +134,7 @@ final class Parser
             }
 
             if ($tok instanceof OpenToken) {
-                [$children, $next] = self::parseNodes($tokens, $tok->kind, $i + 1);
+                [$children, $next] = $this->parseNodes($tokens, $tok->kind, $i + 1);
                 $acc[] = match ($tok->kind) {
                     BlockKind::If_ => new IfNode($tok->path, $children),
                     BlockKind::Unless => new UnlessNode($tok->path, $children),

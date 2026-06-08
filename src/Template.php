@@ -9,6 +9,8 @@ use DocxTemplate\Internal\Ast\IfNode;
 use DocxTemplate\Internal\Ast\Node;
 use DocxTemplate\Internal\Ast\UnlessNode;
 use DocxTemplate\Internal\Ast\VarNode;
+use DocxTemplate\Internal\Image;
+use DocxTemplate\Internal\Interpreter;
 use DocxTemplate\Internal\Parser;
 use DocxTemplate\Internal\Render;
 use DocxTemplate\Internal\SmartMerge;
@@ -17,7 +19,14 @@ use DocxTemplate\Internal\Zip;
 
 final readonly class Template
 {
-    private function __construct(private string $bytes) {}
+    private function __construct(
+        private string $bytes,
+        private Zip $zip,
+        private Parser $parser,
+        private Structural $structural,
+        private SmartMerge $smartMerge,
+        private Render $render,
+    ) {}
 
     public static function load(string $path): self
     {
@@ -26,12 +35,12 @@ final readonly class Template
             throw new TemplateException(sprintf('Could not read template at %s.', $path));
         }
 
-        return new self($bytes);
+        return self::create($bytes);
     }
 
     public static function fromString(string $bytes): self
     {
-        return new self($bytes);
+        return self::create($bytes);
     }
 
     /**
@@ -39,7 +48,7 @@ final readonly class Template
      */
     public function render(array $assigns = []): string
     {
-        return Render::run($this->bytes, $assigns);
+        return $this->render->run($this->bytes, $assigns);
     }
 
     /**
@@ -47,16 +56,16 @@ final readonly class Template
      */
     public function variables(): array
     {
-        $entries = Zip::unpack($this->bytes);
+        $entries = $this->zip->unpack($this->bytes);
         $names = [];
 
         foreach ($entries as $name => $bin) {
-            if (! Zip::isTemplatePart($name)) {
+            if (! $this->zip->isTemplatePart($name)) {
                 continue;
             }
 
-            $ast = Parser::parse(Structural::fixup(SmartMerge::heal($bin)));
-            self::collectNames($ast, $names);
+            $ast = $this->parser->parse($this->structural->fixup($this->smartMerge->heal($bin)));
+            $this->collectNames($ast, $names);
         }
 
         $out = array_keys($names);
@@ -65,11 +74,24 @@ final readonly class Template
         return $out;
     }
 
+    private static function create(string $bytes): self
+    {
+        $zip = new Zip;
+        $parser = new Parser;
+        $structural = new Structural;
+        $smartMerge = new SmartMerge;
+        $interpreter = new Interpreter;
+        $image = new Image;
+        $render = new Render($zip, $parser, $structural, $smartMerge, $interpreter, $image);
+
+        return new self($bytes, $zip, $parser, $structural, $smartMerge, $render);
+    }
+
     /**
      * @param  list<Node>  $nodes
      * @param  array<string, true>  $acc
      */
-    private static function collectNames(array $nodes, array &$acc): void
+    private function collectNames(array $nodes, array &$acc): void
     {
         foreach ($nodes as $node) {
             if ($node instanceof VarNode) {
@@ -80,7 +102,7 @@ final readonly class Template
 
             if ($node instanceof IfNode || $node instanceof UnlessNode || $node instanceof EachNode) {
                 $acc[$node->path] = true;
-                self::collectNames($node->children, $acc);
+                $this->collectNames($node->children, $acc);
             }
         }
     }

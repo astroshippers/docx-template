@@ -11,18 +11,23 @@ use DocxTemplate\Internal\Interpreter;
 use DocxTemplate\Internal\Parser;
 use DocxTemplate\TemplateException;
 
+function parser(): Parser
+{
+    return new Parser;
+}
+
 function render(string $template, array $assigns): string
 {
-    return Interpreter::render(Parser::parse($template), $assigns);
+    return (new Interpreter)->render(parser()->parse($template), $assigns);
 }
 
 describe('Parser::parse', function (): void {
     it('returns a single text node for plain text', function (): void {
-        expect(Parser::parse('hello'))->toEqual([new TextNode('hello')]);
+        expect(parser()->parse('hello'))->toEqual([new TextNode('hello')]);
     });
 
     it('parses a variable', function (): void {
-        expect(Parser::parse('Hi {{name}}!'))->toEqual([
+        expect(parser()->parse('Hi {{name}}!'))->toEqual([
             new TextNode('Hi '),
             new VarNode('name'),
             new TextNode('!'),
@@ -30,7 +35,7 @@ describe('Parser::parse', function (): void {
     });
 
     it('parses if/end blocks', function (): void {
-        expect(Parser::parse('a{{#if flag}}b{{/if}}c'))->toEqual([
+        expect(parser()->parse('a{{#if flag}}b{{/if}}c'))->toEqual([
             new TextNode('a'),
             new IfNode('flag', [new TextNode('b')]),
             new TextNode('c'),
@@ -38,19 +43,19 @@ describe('Parser::parse', function (): void {
     });
 
     it('parses unless blocks', function (): void {
-        expect(Parser::parse('{{#unless flag}}x{{/unless}}'))->toEqual([
+        expect(parser()->parse('{{#unless flag}}x{{/unless}}'))->toEqual([
             new UnlessNode('flag', [new TextNode('x')]),
         ]);
     });
 
     it('parses each blocks', function (): void {
-        expect(Parser::parse('{{#each items}}-{{name}}{{/each}}'))->toEqual([
+        expect(parser()->parse('{{#each items}}-{{name}}{{/each}}'))->toEqual([
             new EachNode('items', [new TextNode('-'), new VarNode('name')]),
         ]);
     });
 
     it('parses nested blocks', function (): void {
-        expect(Parser::parse('{{#each xs}}{{#if on}}{{name}}{{/if}}{{/each}}'))->toEqual([
+        expect(parser()->parse('{{#each xs}}{{#if on}}{{name}}{{/if}}{{/each}}'))->toEqual([
             new EachNode('xs', [
                 new IfNode('on', [new VarNode('name')]),
             ]),
@@ -58,11 +63,11 @@ describe('Parser::parse', function (): void {
     });
 
     it('raises on unbalanced tags', function (): void {
-        Parser::parse('{{#if a}}nope');
+        parser()->parse('{{#if a}}nope');
     })->throws(TemplateException::class, 'unbalanced');
 
     it('raises on mismatched close', function (): void {
-        Parser::parse('{{#if a}}x{{/each}}');
+        parser()->parse('{{#if a}}x{{/each}}');
     })->throws(TemplateException::class, 'mismatched');
 });
 

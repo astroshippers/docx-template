@@ -11,26 +11,26 @@ use DocxTemplate\Internal\Ast\TextNode;
 use DocxTemplate\Internal\Ast\UnlessNode;
 use DocxTemplate\Internal\Ast\VarNode;
 
-final class Interpreter
+final readonly class Interpreter
 {
     /**
      * @param  list<Node>  $ast
      * @param  array<string, mixed>  $assigns
      */
-    public static function render(array $ast, array $assigns): string
+    public function render(array $ast, array $assigns): string
     {
-        return self::renderNodes($ast, [$assigns]);
+        return $this->renderNodes($ast, [$assigns]);
     }
 
     /**
      * @param  list<Node>  $nodes
      * @param  list<array<string, mixed>>  $scopes
      */
-    private static function renderNodes(array $nodes, array $scopes): string
+    private function renderNodes(array $nodes, array $scopes): string
     {
         $out = '';
         foreach ($nodes as $node) {
-            $out .= self::renderNode($node, $scopes);
+            $out .= $this->renderNode($node, $scopes);
         }
 
         return $out;
@@ -39,37 +39,37 @@ final class Interpreter
     /**
      * @param  list<array<string, mixed>>  $scopes
      */
-    private static function renderNode(Node $node, array $scopes): string
+    private function renderNode(Node $node, array $scopes): string
     {
         if ($node instanceof TextNode) {
             return $node->text;
         }
 
         if ($node instanceof VarNode) {
-            return self::xmlEscape(self::stringify(self::lookupScoped($scopes, $node->path)));
+            return $this->xmlEscape($this->stringify($this->lookupScoped($scopes, $node->path)));
         }
 
         if ($node instanceof IfNode) {
-            return self::truthy(self::lookupScoped($scopes, $node->path))
-                ? self::renderNodes($node->children, $scopes)
+            return $this->truthy($this->lookupScoped($scopes, $node->path))
+                ? $this->renderNodes($node->children, $scopes)
                 : '';
         }
 
         if ($node instanceof UnlessNode) {
-            return self::truthy(self::lookupScoped($scopes, $node->path))
+            return $this->truthy($this->lookupScoped($scopes, $node->path))
                 ? ''
-                : self::renderNodes($node->children, $scopes);
+                : $this->renderNodes($node->children, $scopes);
         }
 
         if ($node instanceof EachNode) {
-            $value = self::lookupScoped($scopes, $node->path);
+            $value = $this->lookupScoped($scopes, $node->path);
             if (! is_array($value) || ! array_is_list($value)) {
                 return '';
             }
 
             $out = '';
             foreach ($value as $item) {
-                $out .= self::renderNodes($node->children, [self::itemScope($item), ...$scopes]);
+                $out .= $this->renderNodes($node->children, [$this->itemScope($item), ...$scopes]);
             }
 
             return $out;
@@ -81,7 +81,7 @@ final class Interpreter
     /**
      * @return array<string, mixed>
      */
-    private static function itemScope(mixed $item): array
+    private function itemScope(mixed $item): array
     {
         if (is_array($item) && ! array_is_list($item)) {
             /** @var array<string, mixed> $item */
@@ -96,12 +96,12 @@ final class Interpreter
     /**
      * @param  list<array<string, mixed>>  $scopes
      */
-    private static function lookupScoped(array $scopes, string $path): mixed
+    private function lookupScoped(array $scopes, string $path): mixed
     {
         $parts = explode('.', $path);
-        $miss = self::miss();
+        $miss = $this->miss();
         foreach ($scopes as $scope) {
-            $found = self::fetchPath($scope, $parts);
+            $found = $this->fetchPath($scope, $parts);
             if ($found !== $miss) {
                 return $found;
             }
@@ -113,11 +113,11 @@ final class Interpreter
     /**
      * @param  list<string>  $parts
      */
-    private static function fetchPath(mixed $value, array $parts): mixed
+    private function fetchPath(mixed $value, array $parts): mixed
     {
         foreach ($parts as $part) {
             if (! is_array($value) || ! array_key_exists($part, $value)) {
-                return self::miss();
+                return $this->miss();
             }
 
             $value = $value[$part];
@@ -126,7 +126,7 @@ final class Interpreter
         return $value;
     }
 
-    private static function miss(): \stdClass
+    private function miss(): \stdClass
     {
         /** @var ?\stdClass $sentinel */
         static $sentinel = null;
@@ -134,12 +134,12 @@ final class Interpreter
         return $sentinel ??= new \stdClass;
     }
 
-    private static function truthy(mixed $v): bool
+    private function truthy(mixed $v): bool
     {
         return ! in_array($v, [null, false, '', []], true);
     }
 
-    private static function stringify(mixed $v): string
+    private function stringify(mixed $v): string
     {
         if ($v === null) {
             return '';
@@ -156,7 +156,7 @@ final class Interpreter
         return '';
     }
 
-    private static function xmlEscape(string $s): string
+    private function xmlEscape(string $s): string
     {
         return strtr($s, ['&' => '&amp;', '<' => '&lt;', '>' => '&gt;']);
     }

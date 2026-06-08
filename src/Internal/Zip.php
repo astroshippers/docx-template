@@ -7,14 +7,14 @@ namespace DocxTemplate\Internal;
 use DocxTemplate\TemplateException;
 use ZipArchive;
 
-final class Zip
+final readonly class Zip
 {
     /**
      * @return array<string, string>
      */
-    public static function unpack(string $bin): array
+    public function unpack(string $bin): array
     {
-        $tmp = self::tempFile($bin);
+        $tmp = $this->tempFile($bin);
 
         $zip = new ZipArchive;
         $opened = $zip->open($tmp);
@@ -45,7 +45,7 @@ final class Zip
     /**
      * @param  array<string, string>  $entries
      */
-    public static function pack(array $entries): string
+    public function pack(array $entries): string
     {
         $tmp = tempnam(sys_get_temp_dir(), 'docx-out-');
         if ($tmp === false) {
@@ -74,14 +74,14 @@ final class Zip
         return $bytes;
     }
 
-    public static function isTemplatePart(string $name): bool
+    public function isTemplatePart(string $name): bool
     {
         return in_array($name, ['word/document.xml', 'word/footnotes.xml', 'word/endnotes.xml'], true)
             || str_starts_with($name, 'word/header')
             || str_starts_with($name, 'word/footer');
     }
 
-    private static function tempFile(string $bin): string
+    private function tempFile(string $bin): string
     {
         $tmp = tempnam(sys_get_temp_dir(), 'docx-in-');
         if ($tmp === false || @file_put_contents($tmp, $bin) === false) {

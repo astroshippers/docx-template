@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace DocxTemplate\Internal;
 
-final class SmartMerge
+final readonly class SmartMerge
 {
-    public static function heal(string $xml): string
+    public function heal(string $xml): string
     {
         $out = '';
         $i = 0;
@@ -22,7 +22,7 @@ final class SmartMerge
             $out .= substr($xml, $i, $open - $i);
             $afterOpen = $open + 2;
 
-            $result = self::findClose($xml, $afterOpen);
+            $result = $this->findClose($xml, $afterOpen);
             if ($result === null) {
                 $out .= substr($xml, $open);
                 break;
@@ -42,7 +42,7 @@ final class SmartMerge
      *
      * @return array{0: string, 1: int}|null
      */
-    private static function findClose(string $xml, int $start): ?array
+    private function findClose(string $xml, int $start): ?array
     {
         $n = strlen($xml);
         $inner = '';
@@ -54,7 +54,7 @@ final class SmartMerge
             }
 
             if (substr($xml, $i, 6) === '</w:t>') {
-                $afterOpen = self::skipToNextTextRun($xml, $i + 6);
+                $afterOpen = $this->skipToNextTextRun($xml, $i + 6);
                 if ($afterOpen === null) {
                     return null;
                 }
@@ -71,7 +71,7 @@ final class SmartMerge
         return null;
     }
 
-    private static function skipToNextTextRun(string $xml, int $from): ?int
+    private function skipToNextTextRun(string $xml, int $from): ?int
     {
         $pos = strpos($xml, '<w:t', $from);
         if ($pos === false) {
@@ -79,7 +79,7 @@ final class SmartMerge
         }
 
         $between = substr($xml, $from, $pos - $from);
-        if (! self::safeBetween($between)) {
+        if (! $this->safeBetween($between)) {
             return null;
         }
 
@@ -95,7 +95,7 @@ final class SmartMerge
         return $gt + 1;
     }
 
-    private static function safeBetween(string $s): bool
+    private function safeBetween(string $s): bool
     {
         return array_all(['<w:p ', '<w:p>', '</w:p>', '<w:br'], fn ($needle): bool => ! str_contains($s, (string) $needle));
     }

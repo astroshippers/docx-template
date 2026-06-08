@@ -4,45 +4,54 @@ declare(strict_types=1);
 
 namespace DocxTemplate\Internal;
 
-final class Render
+final readonly class Render
 {
     private const string IMAGE_PARAGRAPH = '/<w:p\b[^>]*>(?:(?!<\/w:p>).)*?\{\{\s*image\s+([a-zA-Z_][a-zA-Z0-9_.]*)\s*\}\}(?:(?!<\/w:p>).)*?<\/w:p>/s';
 
     private const string RID_PREFIX = 'rIdDocxTmpl';
 
+    public function __construct(
+        private Zip $zip,
+        private Parser $parser,
+        private Structural $structural,
+        private SmartMerge $smartMerge,
+        private Interpreter $interpreter,
+        private Image $image,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $assigns
      */
-    public static function run(string $template, array $assigns): string
+    public function run(string $template, array $assigns): string
     {
-        $entries = Zip::unpack($template);
+        $entries = $this->zip->unpack($template);
 
         /** @var list<EmbeddedImage> $images */
         $images = [];
         foreach ($entries as $name => $bin) {
-            $entries[$name] = self::renderEntry($name, $bin, $assigns, $images);
+            $entries[$name] = $this->renderEntry($name, $bin, $assigns, $images);
         }
 
-        return Zip::pack(self::injectImages($entries, $images));
+        return $this->zip->pack($this->injectImages($entries, $images));
     }
 
     /**
      * @param  array<string, mixed>  $assigns
      * @param  list<EmbeddedImage>  $images
      */
-    private static function renderEntry(string $name, string $bin, array $assigns, array &$images): string
+    private function renderEntry(string $name, string $bin, array $assigns, array &$images): string
     {
         if ($name === 'word/document.xml') {
-            $healed = Structural::fixup(SmartMerge::heal($bin));
-            $withDrawings = self::extractImages($healed, $assigns, $images);
+            $healed = $this->structural->fixup($this->smartMerge->heal($bin));
+            $withDrawings = $this->extractImages($healed, $assigns, $images);
 
-            return Interpreter::render(Parser::parse($withDrawings), $assigns);
+            return $this->interpreter->render($this->parser->parse($withDrawings), $assigns);
         }
 
-        if (Zip::isTemplatePart($name)) {
-            $healed = Structural::fixup(SmartMerge::heal($bin));
+        if ($this->zip->isTemplatePart($name)) {
+            $healed = $this->structural->fixup($this->smartMerge->heal($bin));
 
-            return Interpreter::render(Parser::parse($healed), $assigns);
+            return $this->interpreter->render($this->parser->parse($healed), $assigns);
         }
 
         return $bin;
@@ -52,7 +61,7 @@ final class Render
      * @param  array<string, mixed>  $assigns
      * @param  list<EmbeddedImage>  $images
      */
-    private static function extractImages(string $xml, array $assigns, array &$images): string
+    private function extractImages(string $xml, array $assigns, array &$images): string
     {
         if (preg_match_all(self::IMAGE_PARAGRAPH, $xml, $matches, PREG_OFFSET_CAPTURE | PREG_SET_ORDER) === false) {
             return $xml;
@@ -70,9 +79,9 @@ final class Render
             $fullOffset = $m[0][1];
             $var = $m[1][0];
 
-            $image = self::tryBuildImage($assigns[$var] ?? null, $base + $i + 1);
+            $image = $this->tryBuildImage($assigns[$var] ?? null, $base + $i + 1);
             if ($image instanceof EmbeddedImage) {
-                $replacement = Image::paragraphXml($image->rid, $image->cx, $image->cy, $image->n);
+                $replacement = $this->image->paragraphXml($image->rid, $image->cx, $image->cy, $image->n);
                 $newImages[] = $image;
             } else {
                 $replacement = '';
@@ -93,7 +102,7 @@ final class Render
         return $out;
     }
 
-    private static function tryBuildImage(mixed $value, int $n): ?EmbeddedImage
+    private function tryBuildImage(mixed $value, int $n): ?EmbeddedImage
     {
         if (! is_array($value)) {
             return null;
@@ -126,8 +135,8 @@ final class Render
             bytes: $bytes,
             format: $fmt,
             n: $n,
-            cx: Image::cmToEmu($width),
-            cy: Image::cmToEmu($height),
+            cx: $this->image->cmToEmu($width),
+            cy: $this->image->cmToEmu($height),
         );
     }
 
@@ -136,7 +145,7 @@ final class Render
      * @param  list<EmbeddedImage>  $images
      * @return array<string, string>
      */
-    private static function injectImages(array $entries, array $images): array
+    private function injectImages(array $entries, array $images): array
     {
         if ($images === []) {
             return $entries;
@@ -146,9 +155,9 @@ final class Render
             $entries['word/media/image'.$img->n.'.'.$img->format->extension()] = $img->bytes;
         }
 
-        $entries = self::updateRels($entries, $images);
+        $entries = $this->updateRels($entries, $images);
 
-        return self::updateContentTypes($entries, $images);
+        return $this->updateContentTypes($entries, $images);
     }
 
     /**
@@ -156,7 +165,7 @@ final class Render
      * @param  list<EmbeddedImage>  $images
      * @return array<string, string>
      */
-    private static function updateRels(array $entries, array $images): array
+    private function updateRels(array $entries, array $images): array
     {
         $name = 'word/_rels/document.xml.rels';
 
@@ -183,7 +192,7 @@ final class Render
      * @param  list<EmbeddedImage>  $images
      * @return array<string, string>
      */
-    private static function updateContentTypes(array $entries, array $images): array
+    private function updateContentTypes(array $entries, array $images): array
     {
         $name = '[Content_Types].xml';
         if (! isset($entries[$name])) {

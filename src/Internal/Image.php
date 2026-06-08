@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace DocxTemplate\Internal;
 
-final class Image
+final readonly class Image
 {
     private const int CM_TO_EMU = 360_000;
 
-    public static function cmToEmu(float|int $cm): int
+    public function cmToEmu(float|int $cm): int
     {
         return (int) round($cm * self::CM_TO_EMU);
     }
 
-    public static function paragraphXml(string $rid, int $cx, int $cy, int $n): string
+    public function paragraphXml(string $rid, int $cx, int $cy, int $n): string
     {
         return '<w:p><w:r><w:drawing>'
             .'<wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0">'

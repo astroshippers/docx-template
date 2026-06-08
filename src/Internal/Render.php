@@ -6,9 +6,9 @@ namespace DocxTemplate\Internal;
 
 final class Render
 {
-    private const IMAGE_PARAGRAPH = '/<w:p\b[^>]*>(?:(?!<\/w:p>).)*?\{\{\s*image\s+([a-zA-Z_][a-zA-Z0-9_.]*)\s*\}\}(?:(?!<\/w:p>).)*?<\/w:p>/s';
+    private const string IMAGE_PARAGRAPH = '/<w:p\b[^>]*>(?:(?!<\/w:p>).)*?\{\{\s*image\s+([a-zA-Z_][a-zA-Z0-9_.]*)\s*\}\}(?:(?!<\/w:p>).)*?<\/w:p>/s';
 
-    private const RID_PREFIX = 'rIdDocxTmpl';
+    private const string RID_PREFIX = 'rIdDocxTmpl';
 
     /**
      * @param  array<string, mixed>  $assigns
@@ -17,6 +17,7 @@ final class Render
     {
         $entries = Zip::unpack($template);
 
+        /** @var list<EmbeddedImage> $images */
         $images = [];
         foreach ($entries as $name => $bin) {
             $entries[$name] = self::renderEntry($name, $bin, $assigns, $images);
@@ -27,7 +28,7 @@ final class Render
 
     /**
      * @param  array<string, mixed>  $assigns
-     * @param  list<array{rid: string, bytes: string, format: string, n: int}>  $images
+     * @param  list<EmbeddedImage>  $images
      */
     private static function renderEntry(string $name, string $bin, array $assigns, array &$images): string
     {
@@ -49,18 +50,18 @@ final class Render
 
     /**
      * @param  array<string, mixed>  $assigns
-     * @param  list<array{rid: string, bytes: string, format: string, n: int}>  $images
+     * @param  list<EmbeddedImage>  $images
      */
     private static function extractImages(string $xml, array $assigns, array &$images): string
     {
         if (preg_match_all(self::IMAGE_PARAGRAPH, $xml, $matches, PREG_OFFSET_CAPTURE | PREG_SET_ORDER) === false) {
             return $xml;
         }
+
         if ($matches === []) {
             return $xml;
         }
 
-        // Walk matches from right to left so offsets stay valid as we splice.
         $base = count($images);
         $newImages = [];
         $replacements = [];
@@ -69,14 +70,10 @@ final class Render
             $fullOffset = $m[0][1];
             $var = $m[1][0];
 
-            $value = $assigns[$var] ?? null;
-            if (self::isValidImageAssign($value)) {
-                $n = $base + $i + 1;
-                $rid = self::RID_PREFIX.$n;
-                $cx = Image::cmToEmu($value['width_cm']);
-                $cy = Image::cmToEmu($value['height_cm']);
-                $replacement = Image::paragraphXml($rid, $cx, $cy, $n);
-                $newImages[] = ['rid' => $rid, 'bytes' => $value['bytes'], 'format' => $value['format'], 'n' => $n];
+            $image = self::tryBuildImage($assigns[$var] ?? null, $base + $i + 1);
+            if ($image instanceof EmbeddedImage) {
+                $replacement = Image::paragraphXml($image->rid, $image->cx, $image->cy, $image->n);
+                $newImages[] = $image;
             } else {
                 $replacement = '';
             }
@@ -84,7 +81,6 @@ final class Render
             $replacements[] = [$fullOffset, strlen($fullText), $replacement];
         }
 
-        // Apply right-to-left.
         $out = $xml;
         foreach (array_reverse($replacements) as [$offset, $len, $repl]) {
             $out = substr($out, 0, $offset).$repl.substr($out, $offset + $len);
@@ -97,17 +93,47 @@ final class Render
         return $out;
     }
 
-    private static function isValidImageAssign(mixed $v): bool
+    private static function tryBuildImage(mixed $value, int $n): ?EmbeddedImage
     {
-        return is_array($v)
-            && isset($v['bytes'], $v['format'], $v['width_cm'], $v['height_cm'])
-            && is_string($v['bytes'])
-            && in_array($v['format'], ['png', 'jpeg', 'gif'], true);
+        if (! is_array($value)) {
+            return null;
+        }
+
+        $bytes = $value['bytes'] ?? null;
+        $format = $value['format'] ?? null;
+        $width = $value['width_cm'] ?? null;
+        $height = $value['height_cm'] ?? null;
+
+        if (! is_string($bytes) || ! is_string($format)) {
+            return null;
+        }
+
+        if (! is_int($width) && ! is_float($width)) {
+            return null;
+        }
+
+        if (! is_int($height) && ! is_float($height)) {
+            return null;
+        }
+
+        $fmt = ImageFormat::tryFrom($format);
+        if ($fmt === null) {
+            return null;
+        }
+
+        return new EmbeddedImage(
+            rid: self::RID_PREFIX.$n,
+            bytes: $bytes,
+            format: $fmt,
+            n: $n,
+            cx: Image::cmToEmu($width),
+            cy: Image::cmToEmu($height),
+        );
     }
 
     /**
      * @param  array<string, string>  $entries
-     * @param  list<array{rid: string, bytes: string, format: string, n: int}>  $images
+     * @param  list<EmbeddedImage>  $images
      * @return array<string, string>
      */
     private static function injectImages(array $entries, array $images): array
@@ -117,7 +143,7 @@ final class Render
         }
 
         foreach ($images as $img) {
-            $entries['word/media/image'.$img['n'].'.'.Image::extension($img['format'])] = $img['bytes'];
+            $entries['word/media/image'.$img->n.'.'.$img->format->extension()] = $img->bytes;
         }
 
         $entries = self::updateRels($entries, $images);
@@ -127,7 +153,7 @@ final class Render
 
     /**
      * @param  array<string, string>  $entries
-     * @param  list<array{rid: string, bytes: string, format: string, n: int}>  $images
+     * @param  list<EmbeddedImage>  $images
      * @return array<string, string>
      */
     private static function updateRels(array $entries, array $images): array
@@ -136,8 +162,8 @@ final class Render
 
         $newRels = '';
         foreach ($images as $img) {
-            $target = 'media/image'.$img['n'].'.'.Image::extension($img['format']);
-            $newRels .= '<Relationship Id="'.$img['rid'].'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="'.$target.'"/>';
+            $target = 'media/image'.$img->n.'.'.$img->format->extension();
+            $newRels .= '<Relationship Id="'.$img->rid.'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="'.$target.'"/>';
         }
 
         if (isset($entries[$name])) {
@@ -154,7 +180,7 @@ final class Render
 
     /**
      * @param  array<string, string>  $entries
-     * @param  list<array{rid: string, bytes: string, format: string, n: int}>  $images
+     * @param  list<EmbeddedImage>  $images
      * @return array<string, string>
      */
     private static function updateContentTypes(array $entries, array $images): array
@@ -164,16 +190,22 @@ final class Render
             return $entries;
         }
 
-        $needed = array_values(array_unique(array_map(fn (array $i): string => $i['format'], $images)));
         $xml = $entries[$name];
+        $seen = [];
+        foreach ($images as $img) {
+            $ext = $img->format->extension();
+            if (isset($seen[$ext]) || str_contains($xml, 'Extension="'.$ext.'"')) {
+                $seen[$ext] = true;
 
-        foreach ($needed as $fmt) {
-            $ext = Image::extension($fmt);
-            if (str_contains($xml, 'Extension="'.$ext.'"')) {
                 continue;
             }
-            $entry = '<Default Extension="'.$ext.'" ContentType="'.Image::contentType($fmt).'"/>';
-            $xml = preg_replace('/(<Types\b[^>]*>)/', '$1'.$entry, $xml, 1);
+
+            $seen[$ext] = true;
+            $entry = '<Default Extension="'.$ext.'" ContentType="'.$img->format->contentType().'"/>';
+            $replaced = preg_replace('/(<Types\b[^>]*>)/', '$1'.$entry, $xml, 1);
+            if ($replaced !== null) {
+                $xml = $replaced;
+            }
         }
 
         $entries[$name] = $xml;

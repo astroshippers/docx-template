@@ -58,7 +58,9 @@ final class SmartMerge
                 if ($afterOpen === null) {
                     return null;
                 }
+
                 $i = $afterOpen;
+
                 continue;
             }
 
@@ -95,12 +97,6 @@ final class SmartMerge
 
     private static function safeBetween(string $s): bool
     {
-        foreach (['<w:p ', '<w:p>', '</w:p>', '<w:br'] as $needle) {
-            if (str_contains($s, $needle)) {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all(['<w:p ', '<w:p>', '</w:p>', '<w:br'], fn ($needle): bool => ! str_contains($s, (string) $needle));
     }
 }

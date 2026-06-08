@@ -2,8 +2,6 @@
 
 declare(strict_types=1);
 
-use DocxTemplate\Template;
-
 function fixturePath(string $name): string
 {
     return __DIR__.'/fixtures/'.$name;

@@ -6,25 +6,7 @@ namespace DocxTemplate\Internal;
 
 final class Image
 {
-    private const CM_TO_EMU = 360_000;
-
-    public static function extension(string $format): string
-    {
-        return match ($format) {
-            'png' => 'png',
-            'jpeg' => 'jpg',
-            'gif' => 'gif',
-        };
-    }
-
-    public static function contentType(string $format): string
-    {
-        return match ($format) {
-            'png' => 'image/png',
-            'jpeg' => 'image/jpeg',
-            'gif' => 'image/gif',
-        };
-    }
+    private const int CM_TO_EMU = 360_000;
 
     public static function cmToEmu(float|int $cm): int
     {

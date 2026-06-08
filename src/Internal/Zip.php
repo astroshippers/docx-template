@@ -32,6 +32,7 @@ final class Zip
                 @unlink($tmp);
                 throw new TemplateException('Could not read entry from .docx archive.');
             }
+
             $entries[$name] = $content;
         }
 
@@ -50,6 +51,7 @@ final class Zip
         if ($tmp === false) {
             throw new TemplateException('Could not allocate temp file.');
         }
+
         @unlink($tmp);
 
         $zip = new ZipArchive;
@@ -60,6 +62,7 @@ final class Zip
         foreach ($entries as $name => $content) {
             $zip->addFromString($name, $content);
         }
+
         $zip->close();
 
         $bytes = @file_get_contents($tmp);
@@ -73,9 +76,7 @@ final class Zip
 
     public static function isTemplatePart(string $name): bool
     {
-        return $name === 'word/document.xml'
-            || $name === 'word/footnotes.xml'
-            || $name === 'word/endnotes.xml'
+        return in_array($name, ['word/document.xml', 'word/footnotes.xml', 'word/endnotes.xml'], true)
             || str_starts_with($name, 'word/header')
             || str_starts_with($name, 'word/footer');
     }
@@ -87,6 +88,7 @@ final class Zip
             if ($tmp !== false) {
                 @unlink($tmp);
             }
+
             throw new TemplateException('Could not write temp file.');
         }
 

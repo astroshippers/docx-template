@@ -2,6 +2,11 @@
 
 declare(strict_types=1);
 
+use DocxTemplate\Internal\Ast\EachNode;
+use DocxTemplate\Internal\Ast\IfNode;
+use DocxTemplate\Internal\Ast\TextNode;
+use DocxTemplate\Internal\Ast\UnlessNode;
+use DocxTemplate\Internal\Ast\VarNode;
 use DocxTemplate\Internal\Interpreter;
 use DocxTemplate\Internal\Parser;
 use DocxTemplate\TemplateException;
@@ -13,42 +18,42 @@ function render(string $template, array $assigns): string
 
 describe('Parser::parse', function (): void {
     it('returns a single text node for plain text', function (): void {
-        expect(Parser::parse('hello'))->toBe([['text', 'hello']]);
+        expect(Parser::parse('hello'))->toEqual([new TextNode('hello')]);
     });
 
     it('parses a variable', function (): void {
-        expect(Parser::parse('Hi {{name}}!'))->toBe([
-            ['text', 'Hi '],
-            ['var', 'name'],
-            ['text', '!'],
+        expect(Parser::parse('Hi {{name}}!'))->toEqual([
+            new TextNode('Hi '),
+            new VarNode('name'),
+            new TextNode('!'),
         ]);
     });
 
     it('parses if/end blocks', function (): void {
-        expect(Parser::parse('a{{#if flag}}b{{/if}}c'))->toBe([
-            ['text', 'a'],
-            ['if', 'flag', [['text', 'b']]],
-            ['text', 'c'],
+        expect(Parser::parse('a{{#if flag}}b{{/if}}c'))->toEqual([
+            new TextNode('a'),
+            new IfNode('flag', [new TextNode('b')]),
+            new TextNode('c'),
         ]);
     });
 
     it('parses unless blocks', function (): void {
-        expect(Parser::parse('{{#unless flag}}x{{/unless}}'))->toBe([
-            ['unless', 'flag', [['text', 'x']]],
+        expect(Parser::parse('{{#unless flag}}x{{/unless}}'))->toEqual([
+            new UnlessNode('flag', [new TextNode('x')]),
         ]);
     });
 
     it('parses each blocks', function (): void {
-        expect(Parser::parse('{{#each items}}-{{name}}{{/each}}'))->toBe([
-            ['each', 'items', [['text', '-'], ['var', 'name']]],
+        expect(Parser::parse('{{#each items}}-{{name}}{{/each}}'))->toEqual([
+            new EachNode('items', [new TextNode('-'), new VarNode('name')]),
         ]);
     });
 
     it('parses nested blocks', function (): void {
-        expect(Parser::parse('{{#each xs}}{{#if on}}{{name}}{{/if}}{{/each}}'))->toBe([
-            ['each', 'xs', [
-                ['if', 'on', [['var', 'name']]],
-            ]],
+        expect(Parser::parse('{{#each xs}}{{#if on}}{{name}}{{/if}}{{/each}}'))->toEqual([
+            new EachNode('xs', [
+                new IfNode('on', [new VarNode('name')]),
+            ]),
         ]);
     });
 

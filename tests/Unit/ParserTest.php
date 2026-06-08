@@ -69,6 +69,39 @@ describe('Parser::parse', function (): void {
     it('raises on mismatched close', function (): void {
         parser()->parse('{{#if a}}x{{/each}}');
     })->throws(TemplateException::class, 'mismatched');
+
+    it('tolerates whitespace around #, /, and inside block tags', function (): void {
+        expect(render('{{ #if  flag }}y{{ /if }}', ['flag' => true]))->toBe('y');
+        expect(render('{{# if flag}}y{{/ if}}', ['flag' => true]))->toBe('y');
+        expect(render('{{  #each  xs  }}-{{ this }}{{  /each  }}', ['xs' => ['a', 'b']]))->toBe('-a-b');
+    });
+
+    it('tolerates newlines inside tag braces', function (): void {
+        expect(render("Hi {{\n  name\n}}!", ['name' => 'Ostap']))->toBe('Hi Ostap!');
+        expect(render("{{#if\n flag\n}}y{{/if}}", ['flag' => true]))->toBe('y');
+    });
+
+    it('leaves empty braces as literal text', function (): void {
+        expect(render('a{{}}b', []))->toBe('a{{}}b');
+        expect(render('a{{   }}b', []))->toBe('a{{   }}b');
+    });
+
+    it('leaves single curly braces as literal text', function (): void {
+        expect(render('{name} = {{name}}', ['name' => 'Ostap']))->toBe('{name} = Ostap');
+    });
+
+    it('treats extra outer curly braces as literal', function (): void {
+        expect(render('{{{name}}}', ['name' => 'Ostap']))->toBe('{Ostap}');
+    });
+
+    it('handles adjacent tags with no separator', function (): void {
+        expect(render('{{a}}{{b}}', ['a' => '1', 'b' => '2']))->toBe('12');
+    });
+
+    it('renders empty block bodies without error', function (): void {
+        expect(render('a{{#if flag}}{{/if}}b', ['flag' => true]))->toBe('ab');
+        expect(render('a{{#each xs}}{{/each}}b', ['xs' => [1, 2, 3]]))->toBe('ab');
+    });
 });
 
 describe('Interpreter::render', function (): void {

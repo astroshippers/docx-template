@@ -107,12 +107,12 @@ describe('Parser::parse', function (): void {
     })->throws(TemplateException::class, 'should not take arguments');
 
     it('includes the offending tag verbatim in errors', function (): void {
-        expect(fn () => parser()->parse('hello {{#if}}x{{/if}}'))
+        expect(fn (): array => parser()->parse('hello {{#if}}x{{/if}}'))
             ->toThrow(TemplateException::class, '{{#if}}');
     });
 
     it('includes a byte offset in errors', function (): void {
-        expect(fn () => parser()->parse('hello {{#if}}x{{/if}}'))
+        expect(fn (): array => parser()->parse('hello {{#if}}x{{/if}}'))
             ->toThrow(TemplateException::class, 'offset 6');
     });
 

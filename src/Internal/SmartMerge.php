@@ -98,6 +98,6 @@ final readonly class SmartMerge
 
     private function safeBetween(string $s): bool
     {
-        return array_all(['<w:p ', '<w:p>', '</w:p>', '<w:br'], fn ($needle): bool => ! str_contains($s, (string) $needle));
+        return array_all(['<w:p ', '<w:p>', '</w:p>', '<w:br'], fn (string $needle): bool => ! str_contains($s, $needle));
     }
 }

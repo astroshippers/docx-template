@@ -10,6 +10,12 @@ use DocxTemplate\Internal\Ast\Node;
 use DocxTemplate\Internal\Ast\TextNode;
 use DocxTemplate\Internal\Ast\UnlessNode;
 use DocxTemplate\Internal\Ast\VarNode;
+use DocxTemplate\Internal\Token\BlockKind;
+use DocxTemplate\Internal\Token\CloseToken;
+use DocxTemplate\Internal\Token\OpenToken;
+use DocxTemplate\Internal\Token\TextToken;
+use DocxTemplate\Internal\Token\Token;
+use DocxTemplate\Internal\Token\VarToken;
 use DocxTemplate\TemplateException;
 
 final class Parser
@@ -26,16 +32,16 @@ final class Parser
 
         if ($rest < count($tokens)) {
             $tok = $tokens[$rest];
-            throw new TemplateException(sprintf('unbalanced template: unexpected {{/%s}}', $tok[1]));
+            if ($tok instanceof CloseToken) {
+                throw new TemplateException(sprintf('unbalanced template: unexpected {{/%s}}', $tok->kind->value));
+            }
         }
 
         return $ast;
     }
 
     /**
-     * Tokens shape: ['text', string] | ['var', string] | ['open', string, string] | ['close', string]
-     *
-     * @return list<array<int, string>>
+     * @return list<Token>
      */
     private static function tokenize(string $template): array
     {
@@ -49,7 +55,7 @@ final class Parser
             $fullText = $m[0][0];
             $fullOffset = $m[0][1];
             if ($fullOffset > $cursor) {
-                $tokens[] = ['text', substr($template, $cursor, $fullOffset - $cursor)];
+                $tokens[] = new TextToken(substr($template, $cursor, $fullOffset - $cursor));
             }
 
             $prefix = $m[1][0];
@@ -60,87 +66,86 @@ final class Parser
         }
 
         if ($cursor < strlen($template)) {
-            $tokens[] = ['text', substr($template, $cursor)];
+            $tokens[] = new TextToken(substr($template, $cursor));
         }
 
         return $tokens;
     }
 
-    /**
-     * @return list<string>
-     */
-    private static function classify(string $prefix, string $name, string $arg): array
+    private static function classify(string $prefix, string $name, string $arg): Token
     {
         if ($prefix === '' && $arg === '') {
-            return ['var', $name];
+            return new VarToken($name);
         }
 
-        if ($prefix === '#' && in_array($name, ['if', 'unless', 'each'], true) && $arg !== '') {
-            return ['open', $name, $arg];
+        if ($prefix === '#' && $arg !== '') {
+            $kind = BlockKind::tryFrom($name);
+            if ($kind !== null) {
+                return new OpenToken($kind, $arg);
+            }
         }
 
-        if ($prefix === '/' && in_array($name, ['if', 'unless', 'each'], true) && $arg === '') {
-            return ['close', $name];
+        if ($prefix === '/' && $arg === '') {
+            $kind = BlockKind::tryFrom($name);
+            if ($kind !== null) {
+                return new CloseToken($kind);
+            }
         }
 
         throw new TemplateException(sprintf('invalid tag: {{%s%s %s}}', $prefix, $name, $arg));
     }
 
     /**
-     * @param  list<array<int, string>>  $tokens
+     * @param  list<Token>  $tokens
      * @return array{0: list<Node>, 1: int}
      */
-    private static function parseNodes(array $tokens, ?string $expected, int $i): array
+    private static function parseNodes(array $tokens, ?BlockKind $expected, int $i): array
     {
         $acc = [];
         $n = count($tokens);
 
         while ($i < $n) {
             $tok = $tokens[$i];
-            $kind = $tok[0];
 
-            if ($kind === 'close') {
-                $closeKind = $tok[1];
-                if ($expected === null) {
+            if ($tok instanceof CloseToken) {
+                if (! $expected instanceof BlockKind) {
                     return [$acc, $i];
                 }
 
-                if ($expected === $closeKind) {
+                if ($expected === $tok->kind) {
                     return [$acc, $i + 1];
                 }
 
-                throw new TemplateException(sprintf('mismatched close: expected {{/%s}}, got {{/%s}}', $expected, $closeKind));
+                throw new TemplateException(sprintf('mismatched close: expected {{/%s}}, got {{/%s}}', $expected->value, $tok->kind->value));
             }
 
-            if ($kind === 'text') {
-                $acc[] = new TextNode($tok[1]);
+            if ($tok instanceof TextToken) {
+                $acc[] = new TextNode($tok->text);
                 $i++;
 
                 continue;
             }
 
-            if ($kind === 'var') {
-                $acc[] = new VarNode($tok[1]);
+            if ($tok instanceof VarToken) {
+                $acc[] = new VarNode($tok->path);
                 $i++;
 
                 continue;
             }
 
-            // open
-            $blockKind = $tok[1];
-            $path = $tok[2];
-            [$children, $next] = self::parseNodes($tokens, $blockKind, $i + 1);
-            $acc[] = match ($blockKind) {
-                'if' => new IfNode($path, $children),
-                'unless' => new UnlessNode($path, $children),
-                'each' => new EachNode($path, $children),
-                default => throw new TemplateException('unknown block: '.$blockKind),
-            };
-            $i = $next;
+            if ($tok instanceof OpenToken) {
+                [$children, $next] = self::parseNodes($tokens, $tok->kind, $i + 1);
+                $acc[] = match ($tok->kind) {
+                    BlockKind::If_ => new IfNode($tok->path, $children),
+                    BlockKind::Unless => new UnlessNode($tok->path, $children),
+                    BlockKind::Each => new EachNode($tok->path, $children),
+                };
+                $i = $next;
+            }
         }
 
-        if ($expected !== null) {
-            throw new TemplateException(sprintf('unbalanced template: missing {{/%s}}', $expected));
+        if ($expected instanceof BlockKind) {
+            throw new TemplateException(sprintf('unbalanced template: missing {{/%s}}', $expected->value));
         }
 
         return [$acc, $i];

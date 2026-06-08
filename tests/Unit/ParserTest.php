@@ -163,4 +163,43 @@ describe('Interpreter::render', function (): void {
     it('xml-escapes variable output', function (): void {
         expect(render('{{x}}', ['x' => 'a & b < c']))->toBe('a &amp; b &lt; c');
     });
+
+    it('treats numeric zero as truthy in if', function (): void {
+        expect(render('{{#if n}}y{{/if}}', ['n' => 0]))->toBe('y');
+        expect(render('{{#if n}}y{{/if}}', ['n' => '0']))->toBe('y');
+        expect(render('{{#if n}}y{{/if}}', ['n' => 0.0]))->toBe('y');
+    });
+
+    it('renders booleans as the literal strings true/false', function (): void {
+        expect(render('[{{flag}}]', ['flag' => true]))->toBe('[true]');
+        expect(render('[{{flag}}]', ['flag' => false]))->toBe('[false]');
+    });
+
+    it('renders integers and floats', function (): void {
+        expect(render('{{n}}', ['n' => 42]))->toBe('42');
+        expect(render('{{n}}', ['n' => 1.5]))->toBe('1.5');
+    });
+
+    it('renders missing values in dotted paths as empty', function (): void {
+        expect(render('[{{a.b}}]', ['a' => 'hi']))->toBe('[]');
+        expect(render('[{{a.b.c}}]', ['a' => ['b' => 'hi']]))->toBe('[]');
+        expect(render('[{{a.b}}]', ['a' => null]))->toBe('[]');
+    });
+
+    it('renders nothing for each over assoc array or scalar', function (): void {
+        expect(render('x{{#each xs}}y{{/each}}z', ['xs' => ['k' => 'v']]))->toBe('xz');
+        expect(render('x{{#each xs}}y{{/each}}z', ['xs' => 'string']))->toBe('xz');
+        expect(render('x{{#each xs}}y{{/each}}z', ['xs' => 42]))->toBe('xz');
+    });
+
+    it('exposes assoc-item fields through this dotted access', function (): void {
+        expect(render('{{#each users}}[{{this.name}}]{{/each}}', [
+            'users' => [['name' => 'A'], ['name' => 'B']],
+        ]))->toBe('[A][B]');
+    });
+
+    it('renders complex (non-scalar) values as empty', function (): void {
+        expect(render('[{{x}}]', ['x' => ['a', 'b']]))->toBe('[]');
+        expect(render('[{{x}}]', ['x' => new stdClass]))->toBe('[]');
+    });
 });

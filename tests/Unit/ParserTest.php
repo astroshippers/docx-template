@@ -135,6 +135,26 @@ describe('Parser::parse', function (): void {
         expect(render("{{#if\n flag\n}}y{{/if}}", ['flag' => true]))->toBe('y');
     });
 
+    it('allows spaces inside a variable name', function (): void {
+        expect(parser()->parse('Hi {{first name}}!'))->toEqual([
+            new TextNode('Hi '),
+            new VarNode('first name'),
+            new TextNode('!'),
+        ]);
+    });
+
+    it('collapses runs of whitespace inside a variable name', function (): void {
+        expect(parser()->parse('{{  My   first   column  }}'))->toEqual([
+            new VarNode('My first column'),
+        ]);
+    });
+
+    it('allows spaces in dotted path segments', function (): void {
+        expect(parser()->parse('{{user.first name}}'))->toEqual([
+            new VarNode('user.first name'),
+        ]);
+    });
+
     it('leaves empty braces as literal text', function (): void {
         expect(render('a{{}}b', []))->toBe('a{{}}b');
         expect(render('a{{   }}b', []))->toBe('a{{   }}b');
@@ -173,6 +193,12 @@ describe('Interpreter::render', function (): void {
 
     it('tolerates whitespace inside braces', function (): void {
         expect(render('{{  name  }}', ['name' => 'Ostap']))->toBe('Ostap');
+    });
+
+    it('looks up variables with spaces in the name', function (): void {
+        expect(render('{{first name}}', ['first name' => 'Ostap']))->toBe('Ostap');
+        expect(render('Subject {{My first column}}', ['My first column' => 'hello']))
+            ->toBe('Subject hello');
     });
 
     it('renders if-truthy and skips if-falsy', function (): void {

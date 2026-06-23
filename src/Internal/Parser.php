@@ -67,7 +67,11 @@ final readonly class Parser
                 $tokens[] = new TextToken(substr($template, $textStart, $tagStart - $textStart));
             }
 
-            $tokens[] = $this->classify($inner, substr($template, $tagStart, $tagEnd - $tagStart), $tagStart);
+            $tokens[] = $this->classify(new TagSource(
+                raw: substr($template, $tagStart, $tagEnd - $tagStart),
+                offset: $tagStart,
+                inner: $inner,
+            ));
             $textStart = $tagEnd;
             $scanFrom = $tagEnd;
         }
@@ -128,76 +132,80 @@ final readonly class Parser
         return rtrim($out);
     }
 
-    private function classify(string $inner, string $rawTag, int $offset): Token
+    private function classify(TagSource $tag): Token
     {
+        $inner = $tag->inner;
+
         if ($inner === 'else' || str_starts_with($inner, 'else ')) {
-            throw new TemplateException(sprintf(
+            $tag->fail(
                 '%s at offset %d is not supported; if/unless blocks have no else branch',
-                $rawTag, $offset,
-            ));
+                $tag->raw, $tag->offset,
+            );
         }
 
         if ($inner[0] === '#') {
-            return $this->classifyOpen(ltrim(substr($inner, 1)), $rawTag, $offset);
+            return $this->classifyOpen(ltrim(substr($inner, 1)), $tag);
         }
 
         if ($inner[0] === '/') {
-            return $this->classifyClose(ltrim(substr($inner, 1)), $rawTag, $offset);
+            return $this->classifyClose(ltrim(substr($inner, 1)), $tag);
         }
 
-        if ($this->isValidName($inner, allowSpaces: true)) {
-            return new VarToken($inner);
+        $name = Name::variable($inner);
+        if (! $name instanceof Name) {
+            $tag->fail('invalid tag %s at offset %d', $tag->raw, $tag->offset);
         }
 
-        throw new TemplateException(sprintf('invalid tag %s at offset %d', $rawTag, $offset));
+        return new VarToken($name->value);
     }
 
-    private function classifyOpen(string $body, string $rawTag, int $offset): OpenToken
+    private function classifyOpen(string $body, TagSource $tag): OpenToken
     {
-        [$name, $arg] = $this->splitFirstSpace($body);
-        $kind = BlockKind::tryFrom($name);
+        [$keyword, $arg] = $this->splitFirstSpace($body);
+        $kind = BlockKind::tryFrom($keyword);
 
         if (! $kind instanceof BlockKind) {
-            throw new TemplateException(sprintf(
+            $tag->fail(
                 'unknown block %s at offset %d; expected one of: %s',
-                $rawTag, $offset, BlockKind::openListForError(),
-            ));
+                $tag->raw, $tag->offset, BlockKind::openListForError(),
+            );
         }
 
         if ($arg === '') {
-            throw new TemplateException(sprintf(
+            $tag->fail(
                 '%s at offset %d is missing a variable name (e.g. {{#%s items}})',
-                $rawTag, $offset, $name,
-            ));
+                $tag->raw, $tag->offset, $keyword,
+            );
         }
 
-        if (! $this->isValidName($arg, allowSpaces: false)) {
-            throw new TemplateException(sprintf(
+        $name = Name::blockArg($arg);
+        if (! $name instanceof Name) {
+            $tag->fail(
                 'invalid syntax in %s at offset %d; expected a single variable name after #%s',
-                $rawTag, $offset, $name,
-            ));
+                $tag->raw, $tag->offset, $keyword,
+            );
         }
 
-        return new OpenToken($kind, $arg);
+        return new OpenToken($kind, $name->value);
     }
 
-    private function classifyClose(string $body, string $rawTag, int $offset): CloseToken
+    private function classifyClose(string $body, TagSource $tag): CloseToken
     {
-        [$name, $arg] = $this->splitFirstSpace($body);
-        $kind = BlockKind::tryFrom($name);
+        [$keyword, $arg] = $this->splitFirstSpace($body);
+        $kind = BlockKind::tryFrom($keyword);
 
         if (! $kind instanceof BlockKind) {
-            throw new TemplateException(sprintf(
+            $tag->fail(
                 'unknown close tag %s at offset %d; expected one of: %s',
-                $rawTag, $offset, BlockKind::closeListForError(),
-            ));
+                $tag->raw, $tag->offset, BlockKind::closeListForError(),
+            );
         }
 
         if ($arg !== '') {
-            throw new TemplateException(sprintf(
+            $tag->fail(
                 'close tag %s at offset %d should not take arguments',
-                $rawTag, $offset,
-            ));
+                $tag->raw, $tag->offset,
+            );
         }
 
         return new CloseToken($kind);
@@ -211,53 +219,6 @@ final readonly class Parser
         $parts = explode(' ', $s, 2);
 
         return [$parts[0], $parts[1] ?? ''];
-    }
-
-    /**
-     * Names are one or more segments separated by `.` (and, when `$allowSpaces`
-     * is true, single spaces). Each segment must start with a letter or
-     * underscore and continue with letters, digits, or underscore. Leading,
-     * trailing, and consecutive separators are rejected.
-     */
-    private function isValidName(string $s, bool $allowSpaces): bool
-    {
-        $atSegmentStart = true;
-        for ($i = 0, $len = strlen($s); $i < $len; $i++) {
-            $c = $s[$i];
-            $isSep = $c === '.' || ($allowSpaces && $c === ' ');
-
-            if ($isSep) {
-                if ($atSegmentStart) {
-                    return false;
-                }
-
-                $atSegmentStart = true;
-            } elseif ($atSegmentStart) {
-                if (! $this->isNameStart($c)) {
-                    return false;
-                }
-
-                $atSegmentStart = false;
-            } elseif (! $this->isNameCont($c)) {
-                return false;
-            }
-        }
-
-        return ! $atSegmentStart;
-    }
-
-    private function isNameStart(string $c): bool
-    {
-        return ($c >= 'a' && $c <= 'z') || ($c >= 'A' && $c <= 'Z') || $c === '_';
-    }
-
-    private function isNameCont(string $c): bool
-    {
-        if ($this->isNameStart($c)) {
-            return true;
-        }
-
-        return $c >= '0' && $c <= '9';
     }
 
     private function isWhitespace(string $c): bool

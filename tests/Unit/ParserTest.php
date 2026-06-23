@@ -155,6 +155,25 @@ describe('Parser::parse', function (): void {
         ]);
     });
 
+    it('leaves an unterminated {{ as literal text', function (): void {
+        expect(parser()->parse('a {{ b'))->toEqual([new TextNode('a {{ b')]);
+    });
+
+    it('rejects names with leading, trailing, or consecutive dots', function (): void {
+        expect(fn (): array => parser()->parse('{{.a}}'))->toThrow(TemplateException::class, 'invalid tag');
+        expect(fn (): array => parser()->parse('{{a.}}'))->toThrow(TemplateException::class, 'invalid tag');
+        expect(fn (): array => parser()->parse('{{a..b}}'))->toThrow(TemplateException::class, 'invalid tag');
+    });
+
+    it('rejects a segment that starts with a digit after a space', function (): void {
+        expect(fn (): array => parser()->parse('{{first 2name}}'))->toThrow(TemplateException::class, 'invalid tag');
+    });
+
+    it('rejects a dotted block argument with empty segments', function (): void {
+        expect(fn (): array => parser()->parse('{{#if a..b}}x{{/if}}'))
+            ->toThrow(TemplateException::class, 'expected a single variable name');
+    });
+
     it('leaves empty braces as literal text', function (): void {
         expect(render('a{{}}b', []))->toBe('a{{}}b');
         expect(render('a{{   }}b', []))->toBe('a{{   }}b');

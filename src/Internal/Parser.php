@@ -217,33 +217,34 @@ final readonly class Parser
     }
 
     /**
-     * Identifiers start with a letter or underscore and continue with letters,
-     * digits, underscore, or `.`. When `$allowSpaces` is true, single spaces
-     * between segments are also allowed (e.g. variable names like "My column").
+     * Names are one or more segments separated by `.` (and, when `$allowSpaces`
+     * is true, single spaces). Each segment must start with a letter or
+     * underscore and continue with letters, digits, or underscore. Leading,
+     * trailing, and consecutive separators are rejected.
      */
     private function isValidName(string $s, bool $allowSpaces): bool
     {
-        $len = strlen($s);
-        if ($len === 0 || ! $this->isNameStart($s[0])) {
-            return false;
-        }
-
-        $prevSpace = false;
-        for ($i = 1; $i < $len; $i++) {
+        $atSegmentStart = true;
+        for ($i = 0, $len = strlen($s); $i < $len; $i++) {
             $c = $s[$i];
-            if ($c === ' ' && $allowSpaces) {
-                if ($prevSpace) {
+            $isSep = $c === '.' || ($allowSpaces && $c === ' ');
+
+            if ($isSep) {
+                if ($atSegmentStart) {
                     return false;
                 }
-                $prevSpace = true;
-            } elseif ($this->isNameCont($c)) {
-                $prevSpace = false;
-            } else {
+                $atSegmentStart = true;
+            } elseif ($atSegmentStart) {
+                if (! $this->isNameStart($c)) {
+                    return false;
+                }
+                $atSegmentStart = false;
+            } elseif (! $this->isNameCont($c)) {
                 return false;
             }
         }
 
-        return ! $prevSpace;
+        return ! $atSegmentStart;
     }
 
     private function isNameStart(string $c): bool
@@ -253,7 +254,7 @@ final readonly class Parser
 
     private function isNameCont(string $c): bool
     {
-        return $this->isNameStart($c) || ($c >= '0' && $c <= '9') || $c === '.';
+        return $this->isNameStart($c) || ($c >= '0' && $c <= '9');
     }
 
     private function isWhitespace(string $c): bool

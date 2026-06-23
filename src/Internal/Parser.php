@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace DocxTemplate\Internal;
 
-use DocxTemplate\Internal\Ast\EachNode;
-use DocxTemplate\Internal\Ast\IfNode;
 use DocxTemplate\Internal\Ast\Node;
 use DocxTemplate\Internal\Ast\TextNode;
-use DocxTemplate\Internal\Ast\UnlessNode;
 use DocxTemplate\Internal\Ast\VarNode;
 use DocxTemplate\Internal\Token\BlockKind;
 use DocxTemplate\Internal\Token\CloseToken;
@@ -162,8 +159,8 @@ final readonly class Parser
 
         if (! $kind instanceof BlockKind) {
             throw new TemplateException(sprintf(
-                'unknown block %s at offset %d; expected one of: #if, #unless, #each',
-                $rawTag, $offset,
+                'unknown block %s at offset %d; expected one of: %s',
+                $rawTag, $offset, BlockKind::openListForError(),
             ));
         }
 
@@ -191,8 +188,8 @@ final readonly class Parser
 
         if (! $kind instanceof BlockKind) {
             throw new TemplateException(sprintf(
-                'unknown close tag %s at offset %d; expected one of: {{/if}}, {{/unless}}, {{/each}}',
-                $rawTag, $offset,
+                'unknown close tag %s at offset %d; expected one of: %s',
+                $rawTag, $offset, BlockKind::closeListForError(),
             ));
         }
 
@@ -233,11 +230,13 @@ final readonly class Parser
                 if ($atSegmentStart) {
                     return false;
                 }
+
                 $atSegmentStart = true;
             } elseif ($atSegmentStart) {
                 if (! $this->isNameStart($c)) {
                     return false;
                 }
+
                 $atSegmentStart = false;
             } elseif (! $this->isNameCont($c)) {
                 return false;
@@ -254,12 +253,16 @@ final readonly class Parser
 
     private function isNameCont(string $c): bool
     {
-        return $this->isNameStart($c) || ($c >= '0' && $c <= '9');
+        if ($this->isNameStart($c)) {
+            return true;
+        }
+
+        return $c >= '0' && $c <= '9';
     }
 
     private function isWhitespace(string $c): bool
     {
-        return $c === ' ' || $c === "\t" || $c === "\n" || $c === "\r";
+        return in_array($c, [' ', "\t", "\n", "\r"], true);
     }
 
     /**
@@ -297,11 +300,7 @@ final readonly class Parser
                 $i++;
             } elseif ($tok instanceof OpenToken) {
                 [$children, $next] = $this->parseNodes($tokens, $tok->kind, $i + 1);
-                $acc[] = match ($tok->kind) {
-                    BlockKind::If_ => new IfNode($tok->path, $children),
-                    BlockKind::Unless => new UnlessNode($tok->path, $children),
-                    BlockKind::Each => new EachNode($tok->path, $children),
-                };
+                $acc[] = $tok->kind->buildNode($tok->path, $children);
                 $i = $next;
             }
         }
